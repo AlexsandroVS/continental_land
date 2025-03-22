@@ -18,8 +18,8 @@ export const ProjectCard = ({
 }: ProjectCardProps) => {
   return (
     <motion.div
-      className="group relative w-full aspect-square rounded-none overflow-hidden 
-                 shadow-md hover:shadow-xl bg-white transition"
+      className="group relative w-full rounded-none aspect-[4/3] rounded-lg overflow-hidden 
+                 shadow-md hover:shadow-xl bg-white transition-transform"
       whileHover={{ scale: 1.03 }}
       whileTap={{ scale: 0.97 }}
     >
@@ -36,21 +36,21 @@ export const ProjectCard = ({
       </div>
 
       {/* Categoría (flotante en la parte superior izquierda) */}
-      <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 text-white text-xs font-medium rounded 
+      <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 text-white text-xs font-medium rounded 
                       opacity-0 group-hover:opacity-100 transition duration-300">
         {category}
       </div>
 
-      {/* Franja inferior morada con el título */}
+      {/* Franja inferior con el título */}
       <div
-        className="absolute bottom-0 left-0 right-0 px-4 py-8 
+        className="absolute bottom-0 left-0 right-0 px-4 py-4 
                    bg-[var(--color-primario)] text-white flex items-center justify-between
                    translate-y-full group-hover:translate-y-0 transition-transform duration-300"
       >
-        <span className="font-semibold w-5/6 truncate">
+        <span className="font-semibold text-sm w-5/6 truncate">
           {title}
         </span>
-        <FiArrowRight className="w-5 h-5" />
+        <FiArrowRight className="w-4 h-4" />
       </div>
     </motion.div>
   );
