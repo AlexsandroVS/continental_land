@@ -178,12 +178,31 @@ export const getProjectById = async (id) => {
 export const getSections = async () => {
   return makeRequest('get', '/sections');
 };
+export const createSection = async (nameObj, token) => {
+  if (!nameObj || !nameObj.name || !nameObj.image) {
+    throw new Error('El nombre y el icono son obligatorios');
+  }
 
-export const createSection = async (name, token) => {
-  if (!name) throw new Error('El nombre de la sección es obligatorio');
+  try {
+    const response = await api.post('/sections', 
+      { name: nameObj.name, icon: nameObj.image }, 
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
-  return makeRequest('post', '/sections', { name }, token);
+    return response.data;
+  } catch (err) {
+    console.error('❌ Error al crear sección:', err.response?.data || err.message);
+    throw err;
+  }
 };
+
+
+
 
 export const updateSection = async (id, name, token) => {
   if (!name) throw new Error('El nuevo nombre de la sección es obligatorio');

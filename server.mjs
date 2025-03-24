@@ -379,7 +379,8 @@ app.delete('/api/projects/:id', async (req, res) => {
 
         // Si el proyecto tiene imagen, eliminar la imagen del servidor
         if (rows[0].project_image) {
-            const imagePath = path.join(__dirname, '..', rows[0].project_image);
+            const imageFile = path.basename(rows[0].project_image); // Solo el nombre del archivo
+            const imagePath = path.join(__dirname, 'media', 'images', imageFile);
             await fs.remove(imagePath);
         }
 
@@ -398,56 +399,61 @@ app.delete('/api/projects/:id', async (req, res) => {
 
 app.get('/api/sections', async (req, res) => {
     try {
-        // Obtener todas las secciones
-        const [sections] = await db.execute(`SELECT id, name FROM sections`);
-
-        // Obtener todos los proyectos relacionados a las secciones
+        const [sections] = await db.execute(`SELECT id, name, image_url FROM sections`);
         const [projects] = await db.execute(`
             SELECT id, project_name AS title, project_description AS description, 
                    project_image AS image, section_id 
             FROM projects
         `);
 
-        // Log para depuración
-        console.log("📢 Proyectos obtenidos:", projects);
-
-        // Asignar los proyectos a sus respectivas secciones
-        const sectionsWithProjects = sections.map(section => ({
+        const formatted = sections.map(section => ({
             ...section,
+            image_url: section.image_url ? `http://localhost:5000${section.image_url}` : null,
             projects: projects
-                .filter(project => project.section_id === section.id)
-                .map(project => ({
-                    ...project,
-                    image: project.image ? `http://localhost:5000${project.image}` : null // 🔹 Agregar URL completa
+                .filter(p => p.section_id === section.id)
+                .map(p => ({
+                    ...p,
+                    image: p.image ? `http://localhost:5000${p.image}` : null
                 }))
         }));
 
-        console.log("🟢 Secciones y proyectos obtenidos con imágenes:", sectionsWithProjects);
-        res.json(sectionsWithProjects);
+        res.json(formatted);
     } catch (error) {
-        console.error("❌ Error al obtener secciones y proyectos:", error);
-        res.status(500).json({ message: "Error al obtener secciones y proyectos", error });
+        console.error("❌ Error al obtener secciones:", error);
+        res.status(500).json({ message: "Error al obtener secciones", error });
     }
 });
-
 app.post('/api/sections', async (req, res) => {
     try {
-        const { name } = req.body;
-        if (!name) {
-            return res.status(400).json({ message: "El nombre de la sección es obligatorio." });
-        }
-
-        // Insertar nueva sección
-        await db.execute(`INSERT INTO sections (name) VALUES (?)`, [name]);
-
-        console.log("✅ Sección agregada con éxito:", name);
-        res.status(201).json({ message: "Sección agregada correctamente." });
+      console.log("🔍 Datos recibidos en el backend:", req.body); // Debug
+  
+      // Extraer los valores correctamente
+      const { name, icon } = req.body;
+      const sectionName = typeof name === 'object' ? name.name : name;
+      const sectionIcon = typeof name === 'object' ? name.image : icon;
+  
+      if (!sectionName || !sectionIcon) {
+        return res.status(400).json({ message: "El nombre y el icono son obligatorios." });
+      }
+  
+      const [count] = await db.execute(`SELECT COUNT(*) AS total FROM sections`);
+      if (count[0].total >= 18) {
+        return res.status(400).json({ message: "Límite de 18 secciones alcanzado." });
+      }
+  
+      await db.execute(
+        `INSERT INTO sections (name, image_url) VALUES (?, ?)`,
+        [sectionName, sectionIcon] // Guardamos el icono en image_url
+      );
+  
+      res.status(201).json({ message: "Sección creada correctamente." });
     } catch (error) {
-        console.error("❌ Error al agregar sección:", error);
-        res.status(500).json({ message: "Error al agregar sección", error });
+      console.error("❌ Error al agregar sección:", error);
+      res.status(500).json({ message: "Error al agregar sección", error });
     }
-});
-
+  });
+  
+  
 app.get('/api/sections', async (req, res) => {
     try {
         const [sections] = await db.execute(`SELECT id, name FROM sections`);
@@ -471,23 +477,41 @@ app.get('/api/sections', async (req, res) => {
     }
 });
 
-app.put('/api/sections/:id', async (req, res) => {
+app.put('/api/sections/:id', upload.single('image'), async (req, res) => {
     try {
         const { id } = req.params;
         const { name } = req.body;
 
-        if (!name) {
-            return res.status(400).json({ message: "El nombre de la sección es obligatorio." });
-        }
-
-        // Actualizar la sección en la BD
-        const [result] = await db.execute(`UPDATE sections SET name = ? WHERE id = ?`, [name, id]);
-
-        if (result.affectedRows === 0) {
+        const [sections] = await db.execute(`SELECT * FROM sections WHERE id = ?`, [id]);
+        if (sections.length === 0) {
             return res.status(404).json({ message: "Sección no encontrada." });
         }
 
-        console.log("✅ Sección actualizada:", { id, name });
+        const updates = [];
+        const values = [];
+
+        if (name) {
+            updates.push("name = ?");
+            values.push(name);
+        }
+
+        if (req.file) {
+            const oldImage = sections[0].image_url;
+            if (oldImage) {
+                const oldPath = path.join(__dirname, 'media', 'images', path.basename(oldImage));
+                await fs.remove(oldPath);
+            }
+            updates.push("image_url = ?");
+            values.push(`/media/images/${req.file.filename}`);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ message: "No hay datos para actualizar." });
+        }
+
+        values.push(id);
+        await db.execute(`UPDATE sections SET ${updates.join(', ')} WHERE id = ?`, values);
+
         res.json({ message: "Sección actualizada correctamente." });
     } catch (error) {
         console.error("❌ Error al actualizar sección:", error);
@@ -499,28 +523,29 @@ app.delete('/api/sections/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Verificar si la sección tiene proyectos asociados
         const [projects] = await db.execute(`SELECT id FROM projects WHERE section_id = ?`, [id]);
-
         if (projects.length > 0) {
             return res.status(400).json({ message: "No puedes eliminar esta sección porque tiene proyectos asociados." });
         }
 
-        // Eliminar la sección
-        const [result] = await db.execute(`DELETE FROM sections WHERE id = ?`, [id]);
-
-        if (result.affectedRows === 0) {
+        const [sections] = await db.execute(`SELECT image_url FROM sections WHERE id = ?`, [id]);
+        if (sections.length === 0) {
             return res.status(404).json({ message: "Sección no encontrada." });
         }
 
-        console.log("✅ Sección eliminada:", id);
+        if (sections[0].image_url) {
+            const imagePath = path.join(__dirname, 'media', 'images', path.basename(sections[0].image_url));
+            await fs.remove(imagePath);
+            console.log(`🗑 Imagen de sección eliminada: ${imagePath}`);
+        }
+
+        await db.execute(`DELETE FROM sections WHERE id = ?`, [id]);
         res.json({ message: "Sección eliminada correctamente." });
     } catch (error) {
         console.error("❌ Error al eliminar sección:", error);
         res.status(500).json({ message: "Error al eliminar sección", error });
     }
 });
-
 // 🔹 ADAVANTAGES (SECCION DE VENTAJAS)
 
 // 🔹 **Obtener todas las ventajas de un proyecto**
@@ -945,8 +970,12 @@ app.delete('/api/features/:id', async (req, res) => {
 
         // Eliminar el archivo multimedia si existe
         if (feature[0].media_url) {
-            const filePath = path.join(__dirname, '..', feature[0].media_url);
+            const mediaFile = path.basename(feature[0].media_url); // Extraer solo el nombre
+            const folder = feature[0].media_url.includes('/videos/') ? 'videos' : 'images'; // Verificar carpeta
+            const filePath = path.join(__dirname, 'media', folder, mediaFile); // Ruta absoluta
+
             await fs.remove(filePath);
+            console.log(`🗑 Archivo multimedia eliminado: ${filePath}`);
         }
 
         // Eliminar el feature de la base de datos
@@ -1221,14 +1250,35 @@ app.get('/api/projects/:project_id/team-members', async (req, res) => {
   // Eliminar miembro
   app.delete('/api/team-members/:id', async (req, res) => {
     try {
-      const { id } = req.params;
-      await db.execute('DELETE FROM team_members WHERE id = ?', [id]);
-      res.json({ message: 'Miembro eliminado con éxito' });
+        const { id } = req.params;
+
+        // Obtener la URL del avatar antes de eliminar
+        const [rows] = await db.execute('SELECT avatar FROM team_members WHERE id = ?', [id]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: "Miembro no encontrado" });
+        }
+
+        const avatarUrl = rows[0].avatar;
+
+        // Si tiene avatar, eliminar el archivo físico
+        if (avatarUrl) {
+            const avatarFile = path.basename(avatarUrl);
+            const filePath = path.join(__dirname, 'media', 'images', avatarFile);
+            await fs.remove(filePath);
+            console.log(`🗑 Avatar eliminado: ${filePath}`);
+        }
+
+        // Eliminar de la base de datos
+        await db.execute('DELETE FROM team_members WHERE id = ?', [id]);
+
+        res.json({ message: '✅ Miembro eliminado con éxito' });
     } catch (error) {
-      console.error('❌ Error al eliminar miembro:', error);
-      res.status(500).json({ message: 'Error al eliminar miembro', error });
+        console.error('❌ Error al eliminar miembro:', error);
+        res.status(500).json({ message: 'Error al eliminar miembro', error });
     }
-  });
+});
+
   // 📦 WORKFLOW: Título y Subtítulo
 app.get('/api/projects/:project_id/workflow', async (req, res) => {
     const { project_id } = req.params;
@@ -1329,13 +1379,38 @@ app.put('/api/projects/:project_id/workflow-steps/:id', upload.single('image'), 
 
 app.delete('/api/projects/:project_id/workflow-steps/:id', async (req, res) => {
     const { id, project_id } = req.params;
+
     try {
+        // Obtener la URL de la imagen antes de eliminar
+        const [rows] = await db.execute(
+            'SELECT image_url FROM workflow_steps WHERE id = ? AND project_id = ?',
+            [id, project_id]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Paso no encontrado' });
+        }
+
+        const imageUrl = rows[0].image_url;
+
+        // Eliminar la imagen si existe
+        if (imageUrl) {
+            const imageFile = path.basename(imageUrl); // solo el nombre del archivo
+            const filePath = path.join(__dirname, 'media', 'images', imageFile);
+            await fs.remove(filePath);
+            console.log(`🗑 Imagen de paso eliminada: ${filePath}`);
+        }
+
+        // Eliminar el paso de la base de datos
         await db.execute('DELETE FROM workflow_steps WHERE id = ? AND project_id = ?', [id, project_id]);
-        res.json({ message: 'Paso eliminado con éxito' });
+
+        res.json({ message: '✅ Paso eliminado con éxito' });
     } catch (error) {
+        console.error("❌ Error al eliminar paso:", error);
         res.status(500).json({ message: 'Error al eliminar paso', error });
     }
 });
+
 
 // 🔹 **CRUD Genérico para Tablas (excepto `users`)**
 const tables = [

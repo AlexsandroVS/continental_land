@@ -7,6 +7,10 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTimes } from "@fortawesome/free-solid-svg-icons";
 import { FiTrash, FiPlus, FiLogIn, FiLogOut } from "react-icons/fi";
 import {
+  ODSSelectorModal,
+  ODS_CATEGORIES,
+} from "../components/grid/ODSSelectorModal";
+import {
   getSections,
   createSection,
   deleteSection,
@@ -29,15 +33,19 @@ interface Project {
 interface ProjectSection {
   id: string;
   name: string;
+  odsId?: number; // Asegúrate de que esta propiedad esté definida
   projects: Project[];
 }
 
 export default function GridPage() {
   const { user, token, logout } = useAuth();
   const [sections, setSections] = useState<ProjectSection[]>([]);
-  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+  const [selectedODSs, setSelectedODSs] = useState<number[]>([]);
+  const [showAddODSModal, setShowAddODSModal] = useState(false);
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
+    null
+  );
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
-  const [showAddSectionModal, setShowAddSectionModal] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [newProject, setNewProject] = useState<Partial<Project>>({
     title: "",
@@ -48,7 +56,6 @@ export default function GridPage() {
   });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [newSectionName, setNewSectionName] = useState("");
   const navigate = useNavigate();
 
   const handleProjectClick = (project: Project) => {
@@ -59,12 +66,6 @@ export default function GridPage() {
     fetchSections();
   }, []);
 
-  const [heroData, setHeroData] = useState({
-    title: "Innovación en Ingeniería",
-    description: "Soluciones tecnológicas que transforman la industria moderna",
-    backgroundImage: "/public/assets/images/herogrid.jpg",
-  });
-
   const fetchSections = async () => {
     try {
       const sectionsData = await getSections();
@@ -72,12 +73,59 @@ export default function GridPage() {
 
       const formattedSections = sectionsData.map((section: any) => ({
         ...section,
-        projects: projectsData.filter((p: Project) => p.section_id === section.id),
+        projects: projectsData.filter(
+          (p: Project) => p.section_id === section.id
+        ),
       }));
 
       setSections(formattedSections);
     } catch (error) {
-      console.error("❌ Error al obtener secciones y proyectos:", error);
+      console.error("❌ Error al obtener secciones:", error);
+    }
+  };
+  const handleAddODS = async (ods: (typeof ODS_CATEGORIES)[number]) => {
+    try {
+      // 1. Validar que la ODS tenga título
+      if (!ods?.title) {
+        throw new Error("ODS no válida: falta título");
+      }
+
+      // 2. Verificar si ya existe
+      const exists = sections.some((s) => s.name === ods.title);
+      if (exists) {
+        alert("Esta ODS ya está registrada");
+        return;
+      }
+
+      // 3. Extraer el nombre del icono (ej: "FaHandHoldingHeart")
+      const iconName = ods.icon.type.name;
+
+      // 4. Enviar al backend
+      const response = await createSection(
+        {
+          name: ods.title, // Nombre de la ODS
+          image: iconName, // Nombre del icono
+          odsId: ods.id, // ID de referencia
+        },
+        token
+      );
+
+      // 5. Actualizar estado y cerrar modal
+      fetchSections();
+      setShowAddODSModal(false);
+    } catch (error) {
+      console.error("Error detallado:", {
+        error,
+        requestData: {
+          name: ods?.title,
+          image: ods?.icon?.type?.name,
+        },
+      });
+      alert(
+        `Error al agregar ODS: ${
+          error.response?.data?.message || error.message
+        }`
+      );
     }
   };
 
@@ -90,35 +138,29 @@ export default function GridPage() {
   };
 
   const handleDeleteSection = async (sectionId: string) => {
-    if (!window.confirm("¿Estás seguro de eliminar esta sección?")) return;
+    if (!window.confirm("¿Estás seguro de eliminar esta ODS?")) return;
     try {
       await deleteSection(sectionId, token);
       fetchSections();
     } catch (error) {
-      console.error("❌ Error al eliminar sección:", error);
-    }
-  };
-
-  const handleAddSection = async () => {
-    if (!newSectionName.trim()) {
-      alert("El nombre de la sección es obligatorio.");
-      return;
-    }
-    try {
-      await createSection(newSectionName, token);
-      setNewSectionName("");
-      setShowAddSectionModal(false);
-      fetchSections();
-    } catch (error) {
-      console.error("❌ Error al agregar sección:", error);
+      console.error("❌ Error al eliminar ODS:", error);
     }
   };
 
   const handleLogout = () => {
-    logout(); // Llama a la función `logout` del contexto de autenticación
-    navigate("/login"); // Redirige al usuario a la página de login
+    logout();
+    navigate("/login");
   };
-  
+
+  const toggleSectionFilter = (sectionName: string) => {
+    setSelectedODSs(
+      (prev) =>
+        prev.includes(sectionName)
+          ? prev.filter((name) => name !== sectionName) // Si ya está, lo quita
+          : [...prev, sectionName] // Si no está, lo agrega
+    );
+  };
+
   const handleAddProject = async () => {
     if (
       !newProject.title ||
@@ -254,42 +296,52 @@ export default function GridPage() {
     <main className="overflow-hidden">
       {/* Hero */}
       <HeroGrid
-        title={heroData.title}
-        description={heroData.description}
-        backgroundImage={heroData.backgroundImage}
+        title="Innovación en Ingeniería"
+        description="Soluciones tecnológicas que transforman la industria moderna"
+        backgroundImage="/public/assets/images/herogrid.jpg"
       />
 
-      {/* Botones de filtrado por sección */}
+      {/* Botones de filtrado por ODS */}
       <section className="flex flex-wrap justify-center gap-4 px-4 mt-6 mb-0">
+        {/* Botón "Todas las ODS" */}
         <button
-          onClick={() => setSelectedSectionId(null)}
-          className={`px-6 py-4 rounded-lg text-lg ${
-            selectedSectionId === null
+          onClick={() => setSelectedODSs([])}
+          className={`px-6 py-4 rounded-lg text-lg transition-all ${
+            selectedODSs.length === 0
               ? "bg-[var(--color-primario)] text-white"
-              : "bg-gray-200 text-gray-700"
+              : "bg-white text-gray-700 ring-2 ring-[var(--color-primario)]"
           }`}
         >
-          Todas las secciones
+          Todas las ODS
         </button>
-        {sections.map((section) => (
-          <button
-            key={section.id}
-            onClick={() => setSelectedSectionId(section.id)}
-            className={`px-4 py-2 rounded-lg ${
-              selectedSectionId === section.id
-                ? "bg-[var(--color-primario)] text-white"
-                : "bg-gray-200 text-gray-700"
-            }`}
-          >
-            {section.name}
-          </button>
-        ))}
+
+        {/* Mapeo por nombres únicos de las secciones */}
+        {[...new Set(sections.map((s) => s.name))].map((name) => {
+          const isActive = selectedODSs.includes(name);
+
+          return (
+            <button
+              key={name}
+              onClick={() => toggleSectionFilter(name)}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                isActive
+                  ? "bg-[var(--color-primario)] text-white"
+                  : "bg-white text-gray-700 ring-2 ring-[var(--color-primario)]"
+              }`}
+            >
+              {name}
+            </button>
+          );
+        })}
       </section>
 
       {/* Renderizar Secciones */}
       <AnimatePresence>
         {sections
-          .filter((section) => !selectedSectionId || section.id === selectedSectionId)
+          .filter(
+            (section) =>
+              selectedODSs.length === 0 || selectedODSs.includes(section.name) // Ahora filtramos por el nombre
+          )
           .map((section) => (
             <motion.div
               key={section.id}
@@ -338,22 +390,32 @@ export default function GridPage() {
           ))}
       </AnimatePresence>
 
-      {/* Botón Agregar Sección */}
+      {/* Botón Agregar ODS */}
       {user?.role === "admin" && (
         <button
-          onClick={() => setShowAddSectionModal(true)}
+          onClick={() => setShowAddODSModal(true)}
           className="mt-8 px-6 py-3 flex ml-4 bg-[var(--color-primario)] text-white rounded-full hover:bg-[#5a2fc2] transition"
         >
-          <FiPlus className="mr-2" /> Agregar Sección
+          <FiPlus className="mr-2" /> Agregar ODS
         </button>
       )}
 
+      <ODSSelectorModal
+        isOpen={showAddODSModal}
+        onClose={() => setShowAddODSModal(false)}
+        onSelect={handleAddODS}
+      />
+
       {/* Botón flotante para iniciar sesión */}
       <button
-        onClick={user ? handleLogout : () => navigate("/login")} // 🔹 Cambia el comportamiento según si el usuario está autenticado
+        onClick={user ? handleLogout : () => navigate("/login")}
         className="fixed bottom-4 right-4 p-4 bg-[var(--color-primario)] text-white rounded-full shadow-lg hover:bg-[#5a2fc2] transition"
       >
-        {user ? <FiLogOut className="text-2xl" /> : <FiLogIn className="text-2xl" />}
+        {user ? (
+          <FiLogOut className="text-2xl" />
+        ) : (
+          <FiLogIn className="text-2xl" />
+        )}
       </button>
 
       {/* Modales para agregar/editar proyectos y secciones */}
@@ -409,7 +471,7 @@ export default function GridPage() {
                   type="file"
                   accept="image/*"
                   onChange={handleImageChange}
-                  className="hidden "
+                  className="hidden"
                 />
               </label>
 
@@ -447,50 +509,6 @@ export default function GridPage() {
                 className="px-5 py-2 bg-[var(--color-primario)] text-white rounded-lg hover:bg-[#5a2fc2] transition-colors text-lg"
               >
                 {editingProjectId ? "Actualizar" : "Guardar"}
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {showAddSectionModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="bg-white rounded-xl p-8 max-w-md w-full space-y-6 relative"
-          >
-            <button
-              onClick={() => setShowAddSectionModal(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl"
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
-
-            <h3 className="text-2xl font-bold text-gray-900">
-              Agregar Sección
-            </h3>
-
-            <input
-              placeholder="Nombre de la sección"
-              className="w-full p-3 border focus:outline-0 border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primario)] focus:border-transparent text-lg"
-              value={newSectionName}
-              onChange={(e) => setNewSectionName(e.target.value)}
-            />
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowAddSectionModal(false)}
-                className="px-5 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-lg"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleAddSection}
-                className="px-5 py-2 bg-[var(--color-primario)] text-white rounded-lg hover:bg-[#5a2fc2] transition-colors text-lg"
-              >
-                Guardar
               </button>
             </div>
           </motion.div>
