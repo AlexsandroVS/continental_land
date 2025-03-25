@@ -1,57 +1,71 @@
-// ProjectCard.tsx
-import { motion } from "framer-motion";
-import { FiArrowRight } from "react-icons/fi";
+import * as AllIcons from "react-icons/fa";
+import { FaArrowRight } from "react-icons/fa";
 
 interface ProjectCardProps {
   title: string;
   category: string;
   image: string;
-  description?: string;
+  odsIcon: string;
+  odsColor: string;
   onClick?: () => void;
 }
+
+const DynamicIcon = ({
+  name,
+  color,
+  size,
+}: {
+  name: string;
+  color: string;
+  size?: number;
+}) => {
+  const IconComponent = (AllIcons as any)[name];
+  return IconComponent ? <IconComponent color={color} size={size} /> : null;
+};
 
 export const ProjectCard = ({
   title,
   category,
   image,
+  odsIcon,
+  odsColor,
   onClick,
 }: ProjectCardProps) => {
   return (
-    <motion.div
-      className="group relative w-full rounded-none aspect-[4/3] rounded-lg overflow-hidden 
-                 shadow-md hover:shadow-xl bg-white transition-transform"
-      whileHover={{ scale: 1.03 }}
-      whileTap={{ scale: 0.97 }}
-    >
-      {/* Imagen de fondo con zoom al hover */}
-      <div className="relative w-full h-full cursor-pointer" onClick={onClick}>
-        <img
-          src={image}
-          alt={title}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent 
-                       opacity-0 group-hover:opacity-100 transition-opacity duration-300" 
-        />
-      </div>
+    <div className="group relative w-full rounded-xl aspect-[4/3] overflow-hidden shadow-md bg-gray-100 cursor-pointer">
+      {/* Imagen de fondo (estática) */}
+      <img
+        src={image}
+        alt={title}
+        className="w-full h-full object-cover"
+      />
 
-      {/* Categoría (flotante en la parte superior izquierda) */}
-      <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 text-white text-xs font-medium rounded 
-                      opacity-0 group-hover:opacity-100 transition duration-300">
-        {category}
-      </div>
+      {/* Capa oscura */}
+      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10" />
 
-      {/* Franja inferior con el título */}
-      <div
-        className="absolute bottom-0 left-0 right-0 px-4 py-4 
-                   bg-[var(--color-primario)] text-white flex items-center justify-between
-                   translate-y-full group-hover:translate-y-0 transition-transform duration-300"
-      >
-        <span className="font-semibold text-sm w-5/6 truncate">
-          {title}
-        </span>
-        <FiArrowRight className="w-4 h-4" />
+      {/* Contenido con parallax */}
+      <div className="absolute inset-0 z-20 p-4 flex flex-col justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-500 card-parallax-content">
+        {/* Título, categoría e ícono */}
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="text-white font-bold text-lg">{title}</h3>
+            <p className="text-gray-200 text-sm">{category}</p>
+          </div>
+          <div className="bg-white/90 p-2 rounded-full shadow">
+            <DynamicIcon name={odsIcon} color={odsColor} size={24} />
+          </div>
+        </div>
+
+        {/* Botón */}
+        <div className="flex justify-end">
+          <button
+            onClick={onClick}
+            className="flex items-center gap-2 px-4 py-2 bg-white/90 text-gray-900 hover:bg-white transition rounded-full text-sm font-medium shadow"
+          >
+            Ver Proyecto <FaArrowRight className="text-base" />
+          </button>
+        </div>
       </div>
-    </motion.div>
+    </div>
   );
 };

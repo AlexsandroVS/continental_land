@@ -399,30 +399,48 @@ app.delete('/api/projects/:id', async (req, res) => {
 
 app.get('/api/sections', async (req, res) => {
     try {
-        const [sections] = await db.execute(`SELECT id, name, image_url FROM sections`);
-        const [projects] = await db.execute(`
+        // Seleccionar todos los campos necesarios
+        const [sections] = await db.execute(`
+            SELECT id, name, image_url 
+            FROM sections
+        `);
+
+        // Obtener todos los proyectos de una sola vez
+        const [allProjects] = await db.execute(`
             SELECT id, project_name AS title, project_description AS description, 
-                   project_image AS image, section_id 
+                   project_image AS image, section_id
             FROM projects
         `);
 
-        const formatted = sections.map(section => ({
-            ...section,
-            image_url: section.image_url ? `http://localhost:5000${section.image_url}` : null,
-            projects: projects
-                .filter(p => p.section_id === section.id)
-                .map(p => ({
-                    ...p,
-                    image: p.image ? `http://localhost:5000${p.image}` : null
-                }))
-        }));
+        // Procesar las secciones
+        const processedSections = sections.map(section => {
+            // Limpiar el image_url para quedarnos solo con el nombre del ícono
+            let iconName = section.image_url;
+            if (iconName && iconName.includes('http://localhost:5000')) {
+                iconName = iconName.replace('http://localhost:5000', '');
+            }
 
-        res.json(formatted);
+            return {
+                id: section.id,
+                name: section.name,
+                image: iconName, // Guardamos solo el nombre del ícono
+                projects: allProjects
+                    .filter(p => p.section_id === section.id)
+                    .map(p => ({
+                        ...p,
+                        image: p.image ? `http://localhost:5000${p.image}` : null
+                    }))
+            };
+        });
+
+        res.json(processedSections);
     } catch (error) {
-        console.error("❌ Error al obtener secciones:", error);
+        console.error("Error al obtener secciones:", error);
         res.status(500).json({ message: "Error al obtener secciones", error });
     }
 });
+
+
 app.post('/api/sections', async (req, res) => {
     try {
       console.log("🔍 Datos recibidos en el backend:", req.body); // Debug

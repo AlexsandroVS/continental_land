@@ -40,8 +40,10 @@ interface ProjectSection {
 export default function GridPage() {
   const { user, token, logout } = useAuth();
   const [sections, setSections] = useState<ProjectSection[]>([]);
-  const [selectedODSs, setSelectedODSs] = useState<number[]>([]);
+
   const [showAddODSModal, setShowAddODSModal] = useState(false);
+  const [showODSFilterModal, setShowODSFilterModal] = useState(false);
+  const [selectedODSIds, setSelectedODSIds] = useState<number[]>([]);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
     null
   );
@@ -65,22 +67,32 @@ export default function GridPage() {
   useEffect(() => {
     fetchSections();
   }, []);
-
+  // En fetchSections dentro de GridPage.tsx
   const fetchSections = async () => {
     try {
       const sectionsData = await getSections();
       const projectsData = await getProjects();
 
-      const formattedSections = sectionsData.map((section: any) => ({
-        ...section,
-        projects: projectsData.filter(
-          (p: Project) => p.section_id === section.id
-        ),
-      }));
+      const formattedSections = sectionsData.map((section: any) => {
+        // Limpiar el campo image si viene como URL
+        let cleanImage = section.image;
+        if (cleanImage && cleanImage.includes("http://localhost:5000")) {
+          cleanImage = cleanImage.replace("http://localhost:5000", "");
+        }
 
+        return {
+          ...section,
+          image: cleanImage,
+          projects: projectsData.filter(
+            (p: Project) => p.section_id === section.id
+          ),
+        };
+      });
+
+      console.log("Secciones procesadas:", formattedSections);
       setSections(formattedSections);
     } catch (error) {
-      console.error("❌ Error al obtener secciones:", error);
+      console.error("Error al obtener secciones:", error);
     }
   };
   const handleAddODS = async (ods: (typeof ODS_CATEGORIES)[number]) => {
@@ -129,6 +141,14 @@ export default function GridPage() {
     }
   };
 
+  const toggleODSFilter = (odsId: number) => {
+    setSelectedODSIds((prev) =>
+      prev.includes(odsId)
+        ? prev.filter((id) => id !== odsId)
+        : [...prev, odsId]
+    );
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -150,50 +170,6 @@ export default function GridPage() {
   const handleLogout = () => {
     logout();
     navigate("/login");
-  };
-
-  const toggleSectionFilter = (sectionName: string) => {
-    setSelectedODSs(
-      (prev) =>
-        prev.includes(sectionName)
-          ? prev.filter((name) => name !== sectionName) // Si ya está, lo quita
-          : [...prev, sectionName] // Si no está, lo agrega
-    );
-  };
-
-  const handleAddProject = async () => {
-    if (
-      !newProject.title ||
-      !selectedImage ||
-      !selectedSectionId ||
-      !newProject.category ||
-      !newProject.description
-    ) {
-      alert("Completa todos los campos antes de agregar un proyecto.");
-      return;
-    }
-
-    try {
-      await createProject(
-        {
-          title: newProject.title,
-          category: newProject.category,
-          description: newProject.description,
-          section_id: selectedSectionId,
-        },
-        selectedImage,
-        token
-      );
-
-      setShowAddProjectModal(false);
-      setNewProject({ title: "", category: "", description: "", image: "" });
-      setImagePreview(null);
-      setSelectedImage(null);
-      setSelectedSectionId(null);
-      fetchSections();
-    } catch (error) {
-      console.error("❌ Error al agregar proyecto:", error);
-    }
   };
 
   const handleDeleteProject = async (projectId: string) => {
@@ -298,16 +274,16 @@ export default function GridPage() {
       <HeroGrid
         title="Innovación en Ingeniería"
         description="Soluciones tecnológicas que transforman la industria moderna"
-        backgroundImage="/public/assets/images/herogrid.jpg"
+        backgroundImage="/public/assets/images/herocon.jpg"
       />
 
       {/* Botones de filtrado por ODS */}
-      <section className="flex flex-wrap justify-center gap-4 px-4 mt-6 mb-0">
+      <section className="flex justify-center gap-4 px-4 mt-6 mb-0">
         {/* Botón "Todas las ODS" */}
         <button
-          onClick={() => setSelectedODSs([])}
+          onClick={() => setSelectedODSIds([])}
           className={`px-6 py-4 rounded-lg text-lg transition-all ${
-            selectedODSs.length === 0
+            selectedODSIds.length === 0
               ? "bg-[var(--color-primario)] text-white"
               : "bg-white text-gray-700 ring-2 ring-[var(--color-primario)]"
           }`}
@@ -315,33 +291,30 @@ export default function GridPage() {
           Todas las ODS
         </button>
 
-        {/* Mapeo por nombres únicos de las secciones */}
-        {[...new Set(sections.map((s) => s.name))].map((name) => {
-          const isActive = selectedODSs.includes(name);
-
-          return (
-            <button
-              key={name}
-              onClick={() => toggleSectionFilter(name)}
-              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-                isActive
-                  ? "bg-[var(--color-primario)] text-white"
-                  : "bg-white text-gray-700 ring-2 ring-[var(--color-primario)]"
-              }`}
-            >
-              {name}
-            </button>
-          );
-        })}
+        {/* Botón "Filtrar ODS" */}
+        <button
+          onClick={() => setShowODSFilterModal(true)}
+          className={`px-6 py-4 rounded-lg text-lg transition-all ${
+            selectedODSIds.length > 0
+              ? "bg-[var(--color-primario)] text-white"
+              : "bg-white text-gray-700 ring-2 ring-[var(--color-primario)]"
+          }`}
+        >
+          Filtrar ODS
+        </button>
       </section>
 
       {/* Renderizar Secciones */}
       <AnimatePresence>
         {sections
-          .filter(
-            (section) =>
-              selectedODSs.length === 0 || selectedODSs.includes(section.name) // Ahora filtramos por el nombre
-          )
+          .filter((section) => {
+            if (selectedODSIds.length === 0) return true;
+
+            const odsCategory = ODS_CATEGORIES.find(
+              (ods) => ods.id === selectedODSIds.find((id) => id === ods.id)
+            );
+            return odsCategory?.title === section.name;
+          })
           .map((section) => (
             <motion.div
               key={section.id}
@@ -379,11 +352,10 @@ export default function GridPage() {
               )}
 
               <ProjectSlider
-                title={section.name}
+                sections={sections}
                 projects={section.projects}
                 onDeleteProject={handleDeleteProject}
                 onEditProject={handleEditProject}
-                onProjectClick={handleProjectClick}
                 isAdmin={user?.role === "admin"}
               />
             </motion.div>
@@ -404,6 +376,18 @@ export default function GridPage() {
         isOpen={showAddODSModal}
         onClose={() => setShowAddODSModal(false)}
         onSelect={handleAddODS}
+        mode="create"
+      />
+
+      <ODSSelectorModal
+        isOpen={showODSFilterModal}
+        onClose={() => setShowODSFilterModal(false)}
+        onSelect={(ods) => {
+          toggleODSFilter(ods.id);
+        }}
+        selectedODSs={selectedODSIds}
+        onClearFilters={() => setSelectedODSIds([])}
+        mode="filter"
       />
 
       {/* Botón flotante para iniciar sesión */}

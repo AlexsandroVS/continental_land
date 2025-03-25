@@ -6,10 +6,19 @@ import { useAuth } from "../context/AuthContext"; // Importa el contexto de aute
 import { Link } from "react-router-dom"; // Para redirigir al usuario al login
 
 interface NavbarProps {
-  project: ProjectData; // Recibe el estado del proyecto
+  project: ProjectData;
+  flags: {
+    showAdvantages: boolean;
+    showFeatures: boolean;
+    showWorkflow: boolean;
+    showTeam: boolean;
+    showContact: boolean;
+  };
 }
 
-const Navbar = ({ project }: NavbarProps) => {
+
+const Navbar = ({ project, flags }: NavbarProps) => {
+
   const [scrolled, setScrolled] = useState(false);
   const [activeLink, setActiveLink] = useState("hero");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -63,13 +72,13 @@ const Navbar = ({ project }: NavbarProps) => {
   // Enlaces del Navbar (filtrados según las secciones activas)
   const navLinks = [
     { name: "Inicio", target: "hero" },
-    project.showAdvantages && { name: "Ventajas", target: "ventajas" },
-    project.showFeatures && { name: "Beneficios", target: "beneficios" },
-    project.showWorkflow && { name: "Proceso", target: "workflowSection" },
-    project.showTeam && { name: "Equipo", target: "equipo" },
-    project.showContact && { name: "Contacto", target: "contacto" },
-  ].filter(Boolean); // Filtra los enlaces que no están activos
-
+    flags.showAdvantages && { name: "Ventajas", target: "ventajas" },
+    flags.showFeatures && { name: "Beneficios", target: "beneficios" },
+    flags.showWorkflow && { name: "Proceso", target: "workflowSection" },
+    flags.showTeam && { name: "Equipo", target: "equipo" },
+    flags.showContact && { name: "Contacto", target: "contacto" },
+  ].filter(Boolean);
+  
   return (
     <header
       className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${

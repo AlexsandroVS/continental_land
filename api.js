@@ -176,7 +176,10 @@ export const getProjectById = async (id) => {
 // 🔹 **SECCIONES (GRILLA) API Calls**
 ////////////////////////////
 export const getSections = async () => {
-  return makeRequest('get', '/sections');
+  const response = await makeRequest('get', '/sections');
+  // Agrega un console.log para ver qué está devolviendo realmente la API
+  console.log("Respuesta de la API:", response);
+  return response;
 };
 export const createSection = async (nameObj, token) => {
   if (!nameObj || !nameObj.name || !nameObj.image) {

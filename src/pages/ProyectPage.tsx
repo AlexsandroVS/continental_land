@@ -112,7 +112,8 @@ const ProjectPage = () => {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Navbar project={project} />
+    <Navbar project={project} flags={showFlags} />
+
       <main className="flex-grow">
         <Hero
           title={project.title}

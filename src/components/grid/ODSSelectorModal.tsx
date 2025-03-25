@@ -17,9 +17,9 @@ import {
   FaFish,
   FaPeace,
   FaHandshake,
-  FaChartLine
+    
 } from "react-icons/fa";
-import { FiArrowRight, FiX } from "react-icons/fi";
+import {  FiX, FiCheck } from "react-icons/fi";
 
 export const ODS_CATEGORIES = [
   { 
@@ -130,12 +130,20 @@ interface ODSSelectorModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (ods: typeof ODS_CATEGORIES[number]) => void;
+  mode?: 'filter' | 'create'; // Nuevo prop para diferenciar el modo
+  selectedODSs?: number[]; // Solo necesario en modo filtro
+  onApplyFilters?: () => void; // Solo necesario en modo filtro
+  onClearFilters?: () => void
 }
 
 export const ODSSelectorModal = ({ 
   isOpen, 
   onClose, 
-  onSelect 
+  onSelect,
+  onClearFilters,
+  mode = 'create', // Valor por defecto
+  selectedODSs = [],
+  onApplyFilters
 }: ODSSelectorModalProps) => (
   <AnimatePresence>
     {isOpen && (
@@ -148,7 +156,9 @@ export const ODSSelectorModal = ({
         >
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-2xl font-bold text-gray-800">
-              Seleccionar Objetivo de Desarrollo Sostenible
+              {mode === 'filter' 
+                ? 'Filtrar por Objetivos de Desarrollo Sostenible' 
+                : 'Seleccionar ODS'}
             </h3>
             <button
               onClick={onClose}
@@ -164,16 +174,19 @@ export const ODSSelectorModal = ({
                 key={ods.id}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  if (!ods.title) {
-                    console.error("ODS sin título:", ods);
-                    return;
-                  }
-                  onSelect(ods); // Pasar el objeto ODS completo
+                onClick={() => onSelect(ods)}
+                className={`p-4 rounded-lg flex flex-col items-center text-center 
+                         transition-all border-2 ${
+                           mode === 'filter' && selectedODSs.includes(ods.id)
+                             ? "bg-gray-100"
+                             : "hover:bg-gray-50"
+                         }`}
+                style={{ 
+                  borderColor: ods.color,
+                  backgroundColor: mode === 'filter' && selectedODSs.includes(ods.id) 
+                    ? `${ods.color}20` 
+                    : 'transparent'
                 }}
-                className="p-4 rounded-lg flex flex-col items-center text-center 
-                         hover:bg-gray-50 transition-all border-2"
-                style={{ borderColor: ods.color }}
               >
                 <div
                   className="mb-2 p-2 rounded-full"
@@ -186,10 +199,36 @@ export const ODSSelectorModal = ({
                 </span>
                 <div className="mt-2 text-xs text-gray-500 flex items-center">
                   <span className="mr-1">ODS {ods.id}</span>
+                  {mode === 'filter' && selectedODSs.includes(ods.id) && (
+                    <FiCheck className="text-green-500" />
+                  )}
                 </div>
               </motion.button>
             ))}
           </div>
+
+          {mode === 'filter' && (
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+               onClick={() => {
+                onClearFilters?.(); 
+                onClose();
+              }}
+                className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+              >
+                Limpiar filtros
+              </button>
+              <button
+                onClick={() => {
+                  onApplyFilters?.();
+                  onClose();
+                }}
+                className="px-6 py-2 bg-[var(--color-primario)] text-white rounded-lg hover:bg-[#5a2fc2] transition"
+              >
+                Aplicar Filtros
+              </button>
+            </div>
+          )}
         </motion.div>
       </div>
     )}
